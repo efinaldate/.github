@@ -1,0 +1,296 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>QuoteKeeper</title>
+
+  <!-- These tell iOS "when added to the Home Screen, run me full-screen like an app." -->
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Quotes" />
+  <meta name="theme-color" content="#4f46e5" />
+
+  <!-- Home-screen icon (a quote bubble). SVG data-URI, no external files needed. -->
+  <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%234f46e5'/%3E%3Ctext x='90' y='128' font-size='110' text-anchor='middle' fill='white' font-family='Georgia,serif'%3E%E2%80%9C%3C/text%3E%3C/svg%3E" />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%234f46e5'/%3E%3Ctext x='90' y='128' font-size='110' text-anchor='middle' fill='white' font-family='Georgia,serif'%3E%E2%80%9C%3C/text%3E%3C/svg%3E" />
+
+  <style>
+    :root {
+      --accent: #4f46e5;
+      --bg: #f2f2f7;
+      --card: #ffffff;
+      --text: #1c1c1e;
+      --muted: #6b7280;
+      --border: #e5e5ea;
+      --danger: #e5484d;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --accent: #818cf8;
+        --bg: #000000;
+        --card: #1c1c1e;
+        --text: #f2f2f7;
+        --muted: #9ca3af;
+        --border: #38383a;
+        --danger: #ff6b6b;
+      }
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body { margin: 0; height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      /* Respect the notch / home-indicator safe areas so it feels native. */
+      padding: env(safe-area-inset-top) env(safe-area-inset-right)
+               env(safe-area-inset-bottom) env(safe-area-inset-left);
+    }
+
+    header {
+      position: sticky; top: 0; z-index: 5;
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 18px;
+      background: color-mix(in srgb, var(--bg) 88%, transparent);
+      backdrop-filter: saturate(180%) blur(20px);
+      -webkit-backdrop-filter: saturate(180%) blur(20px);
+      border-bottom: 1px solid var(--border);
+    }
+    header h1 { font-size: 26px; font-weight: 700; margin: 0; letter-spacing: -0.02em; }
+    .add-btn {
+      appearance: none; border: none; cursor: pointer;
+      width: 40px; height: 40px; border-radius: 50%;
+      background: var(--accent); color: #fff; font-size: 26px; line-height: 1;
+      display: grid; place-items: center;
+    }
+    .add-btn:active { transform: scale(0.92); }
+
+    main { max-width: 640px; margin: 0 auto; padding: 12px 14px 96px; }
+
+    .quote-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 16px 18px; margin-bottom: 12px;
+      cursor: pointer; transition: transform .06s ease;
+    }
+    .quote-card:active { transform: scale(0.99); }
+    .quote-text { font-size: 17px; line-height: 1.45; }
+    .quote-author { margin-top: 8px; font-size: 14px; color: var(--muted); }
+
+    .empty {
+      text-align: center; color: var(--muted);
+      margin-top: 22vh; padding: 0 24px;
+    }
+    .empty .mark { font-size: 52px; }
+    .empty h2 { margin: 12px 0 6px; color: var(--text); font-size: 20px; }
+
+    /* Editor sheet */
+    .sheet-backdrop {
+      position: fixed; inset: 0; background: rgba(0,0,0,.4);
+      display: none; align-items: flex-end; z-index: 20;
+    }
+    .sheet-backdrop.open { display: flex; }
+    .sheet {
+      background: var(--bg); width: 100%;
+      border-radius: 18px 18px 0 0; padding: 10px 18px
+        calc(24px + env(safe-area-inset-bottom));
+      max-width: 640px; margin: 0 auto;
+      animation: slideUp .22s ease;
+    }
+    @keyframes slideUp { from { transform: translateY(100%); } to { transform: none; } }
+    .sheet-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 0 14px;
+    }
+    .sheet-bar button {
+      appearance: none; background: none; border: none; cursor: pointer;
+      font-size: 17px; color: var(--accent); padding: 6px 2px;
+    }
+    .sheet-bar .title { font-weight: 600; font-size: 17px; color: var(--text); }
+    .sheet-bar .save { font-weight: 600; }
+    .sheet-bar .save:disabled { color: var(--muted); opacity: .5; }
+
+    label { display: block; font-size: 13px; color: var(--muted);
+      margin: 10px 4px 6px; text-transform: uppercase; letter-spacing: .04em; }
+    textarea, input {
+      width: 100%; font-size: 17px; color: var(--text);
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; padding: 12px 14px; font-family: inherit;
+    }
+    textarea { min-height: 110px; resize: none; line-height: 1.4; }
+    textarea:focus, input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+
+    .delete-btn {
+      width: 100%; margin-top: 18px; padding: 13px;
+      background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+      color: var(--danger); font-size: 17px; font-weight: 500; cursor: pointer;
+    }
+    .delete-btn:active { opacity: .7; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Quotes</h1>
+    <button class="add-btn" id="addBtn" aria-label="Add quote">+</button>
+  </header>
+
+  <main id="list"></main>
+
+  <!-- Add / Edit sheet -->
+  <div class="sheet-backdrop" id="backdrop">
+    <div class="sheet" role="dialog" aria-modal="true">
+      <div class="sheet-bar">
+        <button id="cancelBtn">Cancel</button>
+        <span class="title" id="sheetTitle">New Quote</span>
+        <button class="save" id="saveBtn">Save</button>
+      </div>
+      <label for="textField">Quote</label>
+      <textarea id="textField" placeholder="Enter the quote"></textarea>
+      <label for="authorField">Author</label>
+      <input id="authorField" placeholder="Who said it? (optional)" />
+      <button class="delete-btn" id="deleteBtn" style="display:none">Delete Quote</button>
+    </div>
+  </div>
+
+  <script>
+    // ---------------------------------------------------------------------
+    // PERSISTENCE
+    // ---------------------------------------------------------------------
+    // This is the whole "saved file" mechanism. The browser gives every site
+    // a private key-value store called localStorage that stays on the device
+    // between visits. We keep ALL quotes as one JSON string under one key.
+    //
+    //   save  = turn the array into JSON text and put it in localStorage
+    //   load  = read that text back and parse it into an array
+    //
+    // That round-trip (encode -> store -> read -> decode) is exactly what the
+    // native app does with a .json file; here the browser owns the storage.
+    const STORAGE_KEY = "quotekeeper.quotes";
+
+    function loadQuotes() {
+      try {
+        return JSON.parse(localStorage.getItem(STORAGE_KEY)) || [];
+      } catch {
+        return []; // nothing saved yet, or unreadable -> start empty
+      }
+    }
+
+    function saveQuotes(quotes) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(quotes));
+    }
+
+    let quotes = loadQuotes();
+
+    // ---------------------------------------------------------------------
+    // UI
+    // ---------------------------------------------------------------------
+    const listEl     = document.getElementById("list");
+    const backdrop   = document.getElementById("backdrop");
+    const textField  = document.getElementById("textField");
+    const authorField= document.getElementById("authorField");
+    const sheetTitle = document.getElementById("sheetTitle");
+    const saveBtn    = document.getElementById("saveBtn");
+    const deleteBtn  = document.getElementById("deleteBtn");
+
+    let editingId = null; // null = adding a new quote
+
+    function render() {
+      if (quotes.length === 0) {
+        listEl.innerHTML = `
+          <div class="empty">
+            <div class="mark">&#128172;</div>
+            <h2>No Quotes Yet</h2>
+            <p>Tap + to save your first quote. It stays here after you close the app.</p>
+          </div>`;
+        return;
+      }
+      listEl.innerHTML = "";
+      quotes.forEach((q) => {
+        const card = document.createElement("div");
+        card.className = "quote-card";
+        const author = q.author
+          ? `<div class="quote-author">&mdash; ${escapeHtml(q.author)}</div>` : "";
+        card.innerHTML =
+          `<div class="quote-text">&ldquo;${escapeHtml(q.text)}&rdquo;</div>${author}`;
+        card.addEventListener("click", () => openEditor(q.id));
+        listEl.appendChild(card);
+      });
+    }
+
+    function escapeHtml(s) {
+      return s.replace(/[&<>"']/g, (c) => (
+        { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+      ));
+    }
+
+    function openEditor(id) {
+      editingId = id ?? null;
+      if (editingId) {
+        const q = quotes.find((x) => x.id === editingId);
+        sheetTitle.textContent = "Edit Quote";
+        textField.value   = q.text;
+        authorField.value = q.author || "";
+        deleteBtn.style.display = "block";
+      } else {
+        sheetTitle.textContent = "New Quote";
+        textField.value = "";
+        authorField.value = "";
+        deleteBtn.style.display = "none";
+      }
+      updateSaveState();
+      backdrop.classList.add("open");
+      setTimeout(() => textField.focus(), 120);
+    }
+
+    function closeEditor() {
+      backdrop.classList.remove("open");
+      editingId = null;
+    }
+
+    function updateSaveState() {
+      saveBtn.disabled = textField.value.trim().length === 0;
+    }
+
+    // A tiny id generator (no external libraries).
+    function makeId() {
+      return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+    }
+
+    // ---- CRUD wired to persistence ----
+    function commit() {
+      const text = textField.value.trim();
+      const author = authorField.value.trim();
+      if (!text) return;
+
+      if (editingId) {
+        const q = quotes.find((x) => x.id === editingId);
+        q.text = text;
+        q.author = author;
+      } else {
+        quotes.unshift({ id: makeId(), text, author, dateSaved: Date.now() });
+      }
+      saveQuotes(quotes); // <-- persist to disk-like storage
+      render();
+      closeEditor();
+    }
+
+    function removeCurrent() {
+      quotes = quotes.filter((x) => x.id !== editingId);
+      saveQuotes(quotes); // <-- persist the deletion
+      render();
+      closeEditor();
+    }
+
+    // Events
+    document.getElementById("addBtn").addEventListener("click", () => openEditor(null));
+    document.getElementById("cancelBtn").addEventListener("click", closeEditor);
+    saveBtn.addEventListener("click", commit);
+    deleteBtn.addEventListener("click", removeCurrent);
+    textField.addEventListener("input", updateSaveState);
+    backdrop.addEventListener("click", (e) => { if (e.target === backdrop) closeEditor(); });
+
+    render();
+  </script>
+</body>
+</html>
